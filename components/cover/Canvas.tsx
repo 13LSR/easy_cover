@@ -3,7 +3,6 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useCoverStore, RATIOS } from '@/store/useCoverStore';
 import { Icon } from '@iconify/react';
-import { cn } from '@/lib/utils';
 
 export default function Canvas() {
   const {
@@ -35,13 +34,14 @@ export default function Canvas() {
       const parent = containerRef.current.parentElement;
       if (!parent) return;
 
-      const padding = 80;
+      const isMobile = window.innerWidth < 768;
+      const padding = isMobile ? 0 : 80;
       const availableWidth = parent.clientWidth - padding;
       const availableHeight = parent.clientHeight - padding;
 
       const scaleX = availableWidth / dimensions.width;
       const scaleY = availableHeight / dimensions.height;
-      setScale(Math.min(scaleX, scaleY) * 0.9); 
+      setScale(Math.min(scaleX, scaleY) * (isMobile ? 1 : 0.9));
     };
 
     handleResize();
@@ -83,7 +83,17 @@ export default function Canvas() {
               borderRadius: icon.bgShape === 'circle' ? '50%' : icon.bgShape === 'rounded-square' ? `${icon.radius}px` : icon.bgShape === 'square' ? '0' : '0',
           }}
       >
-          <Icon icon={icon.name} width={icon.size} height={icon.size} color={icon.color} />
+          {icon.source === 'upload' && icon.uploadedUrl ? (
+            <img
+              src={icon.uploadedUrl}
+              alt="Uploaded icon"
+              width={icon.size}
+              height={icon.size}
+              className="object-contain"
+            />
+          ) : (
+            <Icon icon={icon.name} width={icon.size} height={icon.size} color={icon.color} />
+          )}
       </div>
       );
   };
@@ -97,6 +107,7 @@ export default function Canvas() {
               fontSize: `${text.fontSize}px`,
               color: text.color,
               fontWeight: text.fontWeight,
+              fontFamily: text.fontFamily,
               WebkitTextStroke: text.strokeWidth > 0 ? `${text.strokeWidth}px ${text.strokeColor}` : undefined,
           }}
       >
@@ -106,17 +117,20 @@ export default function Canvas() {
 
   // Determine Layout Content
   const renderContent = () => {
-      // Default to Overlay Layout
       return (
-          <div className="grid place-items-center relative">
-              <div className="z-10">{renderText(text.content)}</div>
+          <div className="relative flex items-center justify-center" style={{ gap: `${text.gap}px` }}>
+              <div className="z-10">{renderText(text.leftContent)}</div>
+              <div className="z-10">{renderText(text.rightContent)}</div>
               <div className="z-20 absolute">{renderIcon()}</div>
           </div>
       );
   };
 
   return (
-    <div className="flex-1 bg-gray-100 dark:bg-gray-900 overflow-hidden relative w-full h-[40vh] md:h-full min-w-0 flex-shrink-0 md:flex-shrink">
+    <div
+      className="ef-grid order-1 relative h-auto w-full flex-shrink-0 overflow-hidden md:order-2 md:h-full md:min-h-0 md:min-w-0 md:flex-1"
+      style={{ aspectRatio: `${dimensions.width} / ${dimensions.height}` }}
+    >
       {/* Container for scaling */}
       <div
         ref={containerRef}
@@ -133,16 +147,21 @@ export default function Canvas() {
       >
         <div 
             id="canvas-export-target" 
-            className="w-full h-full relative overflow-hidden flex flex-col items-center justify-center"
+            className="ef-panel relative flex h-full w-full flex-col items-center justify-center overflow-hidden"
+            data-canvas-width={dimensions.width}
+            data-canvas-height={dimensions.height}
             style={{
                 boxShadow: background.shadow ? `0 ${background.shadowOffsetY}px ${background.shadowBlur}px ${background.shadowColor}` : 'none',
             }}
         >
+            {text.fontDataUrl && (
+              <style>{`@font-face { font-family: "EasyCoverCustom"; src: url("${text.fontDataUrl}"); font-display: swap; }`}</style>
+            )}
             {/* Background Layer */}
             <div
               className="absolute inset-0"
               style={{
-                backgroundColor: background.type === 'solid' ? background.color : '#ffffff',
+                backgroundColor: background.type === 'solid' ? background.color : 'var(--ef-panel)',
                 borderRadius: `${background.radius}px`,
               }}
             >
@@ -150,7 +169,7 @@ export default function Canvas() {
                     <img 
                         src={background.imageUrl}
                         alt="Background"
-                        className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                        className="absolute inset-0 h-full w-full object-contain pointer-events-none"
                         style={{
                             filter: `blur(${background.blur}px)`,
                             transform: `scale(${background.scale}) translate(${background.positionX - 50}%, ${background.positionY - 50}%) rotate(${background.rotation}deg)`,

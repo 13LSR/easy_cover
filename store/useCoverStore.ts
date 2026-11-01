@@ -10,20 +10,30 @@ export const RATIOS: { label: AspectRatio; width: number; height: number }[] = [
   { label: '2:1', width: 1800, height: 900 },
 ];
 
-interface TextSettings {
-  content: string;
+export interface TextSettings {
+  leftContent: string;
+  rightContent: string;
   fontSize: number;
   color: string;
   strokeColor: string;
   strokeWidth: number;
   fontWeight: number;
+  gap: number;
+  fontFamily: string;
+  fontDataUrl: string;
+  fontFileName: string;
   x: number;
   y: number;
   rotation: number;
 }
 
-interface IconSettings {
+export type IconSource = 'iconify' | 'upload';
+export type IconShape = 'none' | 'circle' | 'square' | 'rounded-square';
+
+export interface IconSettings {
   name: string; // identifier for the icon
+  source: IconSource;
+  uploadedUrl: string;
   size: number;
   color: string; // useful if we allow tinting, even for colored icons
   shadow: boolean;
@@ -31,7 +41,7 @@ interface IconSettings {
   y: number;
   rotation: number;
   // New settings for "Card/Box" style icon
-  bgShape: 'none' | 'circle' | 'square' | 'rounded-square';
+  bgShape: IconShape;
   bgColor: string;
   padding: number;
   radius: number; // For rounded-square custom radius
@@ -43,10 +53,11 @@ interface IconSettings {
   bgBlur: number; // px
 }
 
-interface BackgroundSettings {
+export interface BackgroundSettings {
   type: 'solid' | 'image';
   color: string;
   imageUrl: string;
+  imageFileName: string;
   blur: number; // 0-100
   radius: number; // 0-100
   shadow: boolean;
@@ -80,18 +91,25 @@ export const useCoverStore = create<CoverState>((set) => ({
   selectedRatios: ['16:9'],
   showRuler: true,
   text: {
-    content: '封面标题',
+    leftContent: '示例',
+    rightContent: '文字',
     fontSize: 160,
     color: '#000000',
     strokeColor: '#ffffff',
     strokeWidth: 0,
     fontWeight: 700,
+    gap: 32,
+    fontFamily: 'var(--ef-font-ui)',
+    fontDataUrl: '',
+    fontFileName: '',
     x: 0,
     y: 0,
     rotation: 0,
   },
   icon: {
     name: 'logos:react',
+    source: 'iconify',
+    uploadedUrl: '',
     size: 120,
     color: '#000000',
     shadow: true,
@@ -112,6 +130,7 @@ export const useCoverStore = create<CoverState>((set) => ({
     type: 'solid',
     color: '#f3f4f6',
     imageUrl: '',
+    imageFileName: '',
     blur: 0,
     radius: 0,
     shadow: false,

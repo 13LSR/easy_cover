@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { useCoverStore, RATIOS, AspectRatio } from '@/store/useCoverStore';
+import React, { useEffect, useState } from 'react';
+import { useCoverStore, RATIOS, IconShape } from '@/store/useCoverStore';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
@@ -14,7 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { IconPicker } from '@/components/cover/IconPicker';
 import { Separator } from '@/components/ui/separator';
-import { Download, RotateCcw, Maximize, Github } from 'lucide-react';
+import { Check, Copy, Download, Maximize, Moon, RotateCcw, Sun } from 'lucide-react';
 import { toPng } from 'html-to-image';
 
 // Helper component for Reset Button
@@ -32,55 +32,128 @@ const ResetButton = ({ onClick, tooltip = "重置" }: { onClick: () => void, too
 
 export default function Controls() {
   const store = useCoverStore();
+  const [isDraggingBackground, setIsDraggingBackground] = useState(false);
+  const [isDark, setIsDark] = useState(false);
+  const [lastExportUrl, setLastExportUrl] = useState('');
+  const [isCopied, setIsCopied] = useState(false);
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem('easycover-theme');
+    const nextIsDark = savedTheme ? savedTheme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const frame = window.requestAnimationFrame(() => setIsDark(nextIsDark));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark);
+    document.documentElement.classList.toggle('light', !isDark);
+  }, [isDark]);
+
+  const toggleTheme = () => {
+    const nextIsDark = !isDark;
+    setIsDark(nextIsDark);
+    document.documentElement.classList.toggle('dark', nextIsDark);
+    document.documentElement.classList.toggle('light', !nextIsDark);
+    window.localStorage.setItem('easycover-theme', nextIsDark ? 'dark' : 'light');
+  };
+
+  const readFileAsDataUrl = (file: File, onLoad: (dataUrl: string) => void) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') onLoad(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const applyBackgroundFile = (file?: File) => {
+    if (!file || (!file.type.startsWith('image/') && !/\.(png|jpe?g|webp|gif|svg)$/i.test(file.name))) return;
+    readFileAsDataUrl(file, (imageUrl) => {
+      store.updateBackground({ type: 'image', imageUrl, imageFileName: file.name });
+    });
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      store.updateBackground({ type: 'image', imageUrl: url });
-    }
+    applyBackgroundFile(file);
+    e.target.value = '';
+  };
+
+  const handleFontUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !/\.(ttf|otf|woff2?|woff)$/i.test(file.name)) return;
+    readFileAsDataUrl(file, (fontDataUrl) => {
+      store.updateText({ fontFamily: 'EasyCoverCustom', fontDataUrl, fontFileName: file.name });
+    });
+    e.target.value = '';
   };
 
   const handleExport = async () => {
-    // This requires accessing the DOM node. 
-    // Ideally, we pass a ref or use an ID.
-    // We'll target the container inside Canvas.
-    // Since Controls is a sibling, we might need a way to signal.
-    // For now, let's assume we can find the element by a known ID or class.
-    // But `html-to-image` works best if we have the Ref.
-    // I will dispatch a custom event or use a global ID.
-    // Let's add an ID to the Canvas container in Canvas.tsx: id="canvas-export-target"
-    
     const node = document.getElementById('canvas-export-target');
     if (!node) return;
-
-    // We might need to handle scaling back to 1 before export, or html-to-image handles it.
-    // Usually better to clone and export.
-    // For now, simple attempt:
     try {
-      const dataUrl = await toPng(node as HTMLElement, { 
-          quality: 0.95, 
-          pixelRatio: 1,
-          filter: (node) => {
-              // Exclude elements with the class 'export-exclude'
-              if (node.classList && node.classList.contains('export-exclude')) {
-                  return false;
-              }
-              return true;
-          }
+      const fullWidth = Number((node as HTMLElement).dataset.canvasWidth) || node.clientWidth;
+      const fullHeight = Number((node as HTMLElement).dataset.canvasHeight) || node.clientHeight;
+      const fullDataUrl = await toPng(node as HTMLElement, {
+        quality: 0.95,
+        pixelRatio: 1,
+        width: fullWidth,
+        height: fullHeight,
+        cacheBust: true,
+        filter: (element) => !element.classList?.contains('export-exclude'),
       });
-      const link = document.createElement('a');
-      link.download = 'easy-cover.png';
-      link.href = dataUrl;
-      link.click();
+      const sourceImage = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+        image.src = fullDataUrl;
+      });
+      const selected = RATIOS.filter((ratio) => store.selectedRatios.includes(ratio.label));
+      const exportUrls: { label: string; url: string }[] = [];
+      selected.forEach((ratio) => {
+        const crop = document.createElement('canvas');
+        crop.width = ratio.width;
+        crop.height = ratio.height;
+        const context = crop.getContext('2d');
+        if (!context) return;
+        const left = (fullWidth - ratio.width) / 2;
+        const top = (fullHeight - ratio.height) / 2;
+        context.drawImage(sourceImage, left, top, ratio.width, ratio.height, 0, 0, ratio.width, ratio.height);
+        exportUrls.push({ label: ratio.label, url: crop.toDataURL('image/png') });
+      });
+      exportUrls.forEach(({ label, url }) => {
+        const link = document.createElement('a');
+        link.download = `easy-cover-${label.replace(':', 'x')}.png`;
+        link.href = url;
+        link.click();
+      });
+      setLastExportUrl(exportUrls[0]?.url ?? '');
+      setIsCopied(false);
     } catch (err) {
       console.error('Export failed', err);
     }
   };
 
+  const handleCopyLink = async () => {
+    if (!lastExportUrl) return;
+    try {
+      await navigator.clipboard.writeText(lastExportUrl);
+    } catch {
+      const input = document.createElement('textarea');
+      input.value = lastExportUrl;
+      input.style.position = 'fixed';
+      input.style.opacity = '0';
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      input.remove();
+    }
+    setIsCopied(true);
+    window.setTimeout(() => setIsCopied(false), 1600);
+  };
+
   const handleFit = (mode: 'contain' | 'cover') => {
       // Always reset position and rotation
-      const updates: any = { positionX: 50, positionY: 50, rotation: 0 };
+      const updates: { positionX: number; positionY: number; rotation: number; scale?: number } = { positionX: 50, positionY: 50, rotation: 0 };
       
       // We will simply reset scale to 1 and let user manually adjust if they want 'contain'.
       // But for 'cover', we try to calculate a scale that fills the canvas.
@@ -136,23 +209,34 @@ export default function Controls() {
   };
 
   return (
-    <div className="w-full md:w-80 h-1/2 md:h-full border-t md:border-t-0 md:border-r bg-background flex flex-col shadow-lg z-10">
-      <div className="p-4 border-b">
-        <h1 className="text-xl font-bold flex items-center gap-2">
-           EasyCover - AcoFork
-        </h1>
-        <p className="text-xs text-muted-foreground mt-1">
-            简单、优雅的纯客户端封面图生成器。无需上传，保护隐私。
-        </p>
+    <div className="ef-panel order-2 flex min-h-0 w-full flex-1 flex-col border-t md:order-1 md:h-full md:w-[360px] md:flex-none md:border-r md:border-t-0">
+      <div className="border-b border-border p-4 md:p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="ef-eyebrow">{"// EASY COVER / STUDIO"}</div>
+            <h1 className="mt-1 text-xl font-bold tracking-tight md:text-2xl">封面生成器</h1>
+            <p className="mt-2 max-w-[280px] text-xs leading-5 text-muted-foreground">
+              数据仅保存在本地浏览器，安全安心。做好封面记得下载，刷新页面就没了！
+            </p>
+          </div>
+          <Button variant="outline" size="icon" className="ef-cut ef-touch shrink-0" onClick={toggleTheme} title={isDark ? '切换到冷库浅色模式' : '切换到夜班深色模式'}>
+            {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
+        </div>
+        <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-xs">
+          <span className="font-mono text-muted-foreground">MODE / {isDark ? 'NIGHTSHIFT' : 'COLDSTORE'}</span>
+          <span className="bg-accent px-2 py-1 font-mono font-bold text-accent-foreground">LOCAL</span>
+        </div>
       </div>
       
-      <div className="flex-1 min-h-0 w-full">
+      <div className="min-h-0 w-full flex-1">
         <ScrollArea className="h-full">
-            <div className="p-4 space-y-6">
+            <div className="space-y-6 p-4 md:p-5">
           
           {/* Layout Section */}
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">布局设置</h3>
+            <div className="ef-eyebrow">{"// 01 / FORMAT"}</div>
+            <h3 className="text-base font-bold">画布比例</h3>
             
             <div className="space-y-2">
               <Label>图片比例</Label>
@@ -186,12 +270,35 @@ export default function Controls() {
 
           {/* Text Section */}
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">文字设置</h3>
+            <div className="ef-eyebrow">{"// 02 / TYPE"}</div>
+            <h3 className="text-base font-bold">文字设置</h3>
             <div className="space-y-2">
-              <Label>内容</Label>
-              <Input 
-                value={store.text.content} 
-                onChange={(e) => store.updateText({ content: e.target.value })} 
+              <Label>左侧文字</Label>
+              <Input
+                value={store.text.leftContent}
+                onChange={(e) => store.updateText({ leftContent: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>右侧文字</Label>
+              <Input
+                value={store.text.rightContent}
+                onChange={(e) => store.updateText({ rightContent: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <Label>左右文字间距 ({store.text.gap}px)</Label>
+                <ResetButton onClick={() => store.updateText({ gap: 32 })} />
+              </div>
+              <Slider
+                value={[store.text.gap]}
+                min={0}
+                max={500}
+                step={1}
+                onValueChange={(v) => store.updateText({ gap: v[0] })}
               />
             </div>
             
@@ -232,16 +339,51 @@ export default function Controls() {
                <Label>描边颜色</Label>
                <ColorPicker color={store.text.strokeColor} onChange={(c) => store.updateText({ strokeColor: c })} />
             </div>
+
+             <div className="space-y-2">
+               <div className="flex items-center justify-between gap-2">
+                 <Label>自定义字体</Label>
+                 <label className="ef-cut ef-touch flex cursor-pointer items-center border border-border px-3 py-2 text-xs font-bold hover:bg-accent hover:text-accent-foreground">
+                   上传字体
+                   <input
+                     type="file"
+                     accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2"
+                     onChange={handleFontUpload}
+                     className="sr-only"
+                   />
+                 </label>
+               </div>
+               <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                 <span className="truncate">{store.text.fontDataUrl ? `已选择：${store.text.fontFileName || '自定义字体'}` : '当前使用默认字体'}</span>
+                 {store.text.fontDataUrl && (
+                   <Button
+                     variant="ghost"
+                     size="sm"
+                     className="h-7 shrink-0"
+                     onClick={() => store.updateText({ fontFamily: 'var(--ef-font-ui)', fontDataUrl: '', fontFileName: '' })}
+                   >
+                     恢复默认
+                   </Button>
+                 )}
+               </div>
+             </div>
           </section>
 
           <Separator />
 
           {/* Icon Section */}
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">图标设置</h3>
+            <div className="ef-eyebrow">{"// 03 / MARK"}</div>
+            <h3 className="text-base font-bold">图标设置</h3>
             <div className="space-y-2">
               <Label>选择图标</Label>
-              <IconPicker value={store.icon.name} onChange={(v) => store.updateIcon({ name: v })} />
+              <IconPicker
+                value={store.icon.name}
+                source={store.icon.source}
+                uploadedUrl={store.icon.uploadedUrl}
+                onChange={(v) => store.updateIcon({ name: v, source: 'iconify', uploadedUrl: '' })}
+                onUpload={(uploadedUrl) => store.updateIcon({ source: 'upload', uploadedUrl })}
+              />
             </div>
 
             <div className="space-y-2">
@@ -287,7 +429,7 @@ export default function Controls() {
             </div>
 
             {store.icon.shadow && (
-                <div className="space-y-2 p-3 bg-muted/30 rounded-lg border">
+                <div className="ef-hatch space-y-2 border border-border p-3">
                     <div className="flex items-center justify-between">
                        <Label className="text-xs">阴影颜色</Label>
                        <ColorPicker color={store.icon.shadowColor} onChange={(c) => store.updateIcon({ shadowColor: c })} />
@@ -327,7 +469,7 @@ export default function Controls() {
             
             <div className="space-y-2">
                 <Label>图标容器形状</Label>
-                <Select value={store.icon.bgShape} onValueChange={(v) => store.updateIcon({ bgShape: v as any })}>
+                <Select value={store.icon.bgShape} onValueChange={(v) => store.updateIcon({ bgShape: v as IconShape })}>
                     <SelectTrigger>
                         <SelectValue placeholder="容器形状" />
                     </SelectTrigger>
@@ -410,7 +552,8 @@ export default function Controls() {
 
           {/* Background Section */}
           <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">背景设置</h3>
+            <div className="ef-eyebrow">{"// 04 / GROUND"}</div>
+            <h3 className="text-base font-bold">背景设置</h3>
             
             <Tabs defaultValue={store.background.type} onValueChange={(v) => store.updateBackground({ type: v as 'solid' | 'image' })}>
                 <TabsList className="grid w-full grid-cols-2">
@@ -426,7 +569,26 @@ export default function Controls() {
                 </TabsContent>
                 
                 <TabsContent value="image" className="space-y-2 mt-2">
-                     <Input type="file" accept="image/*" onChange={handleImageUpload} />
+                     <div
+                       className={`ef-cut border-2 border-dashed p-4 text-center transition-colors ${isDraggingBackground ? 'border-accent bg-accent/20' : 'border-border bg-muted/20'}`}
+                       onDragOver={(event) => {
+                         event.preventDefault();
+                         setIsDraggingBackground(true);
+                       }}
+                       onDragLeave={() => setIsDraggingBackground(false)}
+                       onDrop={(event) => {
+                         event.preventDefault();
+                         setIsDraggingBackground(false);
+                         applyBackgroundFile(event.dataTransfer.files?.[0]);
+                       }}
+                     >
+                       <p className="text-sm font-bold">{store.background.imageFileName ? `已选择：${store.background.imageFileName}` : '拖拽图片到这里'}</p>
+                       <p className="mt-1 text-xs text-muted-foreground">或点击下方按钮选择本地图片</p>
+                     <label className="ef-cut ef-touch mt-3 flex cursor-pointer items-center justify-center border border-border px-3 py-2 text-xs font-bold hover:bg-accent hover:text-accent-foreground">
+                       选择图片文件
+                       <input type="file" accept="image/*" onChange={handleImageUpload} className="sr-only" />
+                     </label>
+                     </div>
                      
                      <div className="space-y-2">
                         <div className="flex justify-between items-center">
@@ -534,7 +696,7 @@ export default function Controls() {
             </div>
 
             {store.background.shadow && (
-                <div className="space-y-2 p-3 bg-muted/30 rounded-lg border mt-2">
+                <div className="ef-hatch mt-2 space-y-2 border border-border p-3">
                     <div className="flex items-center justify-between">
                        <Label className="text-xs">阴影颜色</Label>
                        <ColorPicker color={store.background.shadowColor} onChange={(c) => store.updateBackground({ shadowColor: c })} />
@@ -575,18 +737,16 @@ export default function Controls() {
       </ScrollArea>
       </div>
 
-      <div className="p-4 border-t bg-gray-50 dark:bg-gray-950 space-y-4">
-         <Button className="w-full" onClick={handleExport}>
+      <div className="border-t border-border bg-card p-3 md:space-y-4 md:p-4">
+         <Button className="ef-cut ef-touch w-full" onClick={handleExport}>
             <Download className="w-4 h-4 mr-2" />
             导出封面图
          </Button>
+         <Button className="ef-cut ef-touch w-full" variant="outline" onClick={handleCopyLink} disabled={!lastExportUrl}>
+            {isCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+            {isCopied ? '已复制图片数据链接' : '复制图片下载链接'}
+         </Button>
          
-         <div className="text-center text-xs text-muted-foreground">
-            <a href="https://github.com/afoim/easy_cover" target="_blank" rel="noopener noreferrer" className="hover:underline flex items-center justify-center gap-1">
-                <Github className="w-4 h-4" />
-                GitHub 开源仓库
-            </a>
-         </div>
       </div>
     </div>
   );

@@ -27,10 +27,13 @@ function useDebounceValue<T>(value: T, delay: number): T {
 
 interface IconPickerProps {
   value: string;
+  source?: 'iconify' | 'upload';
+  uploadedUrl?: string;
   onChange: (value: string) => void;
+  onUpload: (dataUrl: string) => void;
 }
 
-export function IconPicker({ value, onChange }: IconPickerProps) {
+export function IconPicker({ value, source = 'iconify', uploadedUrl, onChange, onUpload }: IconPickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [icons, setIcons] = useState<string[]>([]);
@@ -50,7 +53,6 @@ export function IconPicker({ value, onChange }: IconPickerProps) {
 
   useEffect(() => {
     if (!debouncedQuery) {
-        setIcons(featuredIcons);
         return;
     }
 
@@ -60,7 +62,10 @@ export function IconPicker({ value, onChange }: IconPickerProps) {
         const res = await fetch(`https://api.iconify.design/search?query=${encodeURIComponent(debouncedQuery)}&limit=50`);
         const data = await res.json();
         if (data.icons) {
-          setIcons(data.icons);
+          const exactIcon = /^[a-z0-9-]+:[a-z0-9-]+$/i.test(debouncedQuery.trim())
+            ? [debouncedQuery.trim()]
+            : [];
+          setIcons(Array.from(new Set([...exactIcon, ...data.icons])));
         }
       } catch (error) {
         console.error('Failed to fetch icons:', error);
@@ -72,23 +77,35 @@ export function IconPicker({ value, onChange }: IconPickerProps) {
     searchIcons();
   }, [debouncedQuery]);
 
-  // Initial load
-  useEffect(() => {
-      if(!query) setIcons(featuredIcons);
-  }, []);
+  const handleUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || (!file.type.startsWith('image/') && !file.name.toLowerCase().endsWith('.svg'))) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') onUpload(reader.result);
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  };
+
+  const displayedIcons = debouncedQuery ? icons : featuredIcons;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" className="w-full justify-start text-left font-normal px-3">
           <div className="flex items-center gap-2 overflow-hidden">
-             <Icon icon={value} className="w-5 h-5 flex-shrink-0" />
-             <span className="truncate">{value || "选择图标..."}</span>
+             {source === 'upload' && uploadedUrl ? (
+               <img src={uploadedUrl} alt="Uploaded icon" className="h-5 w-5 shrink-0 object-contain" />
+             ) : (
+               <Icon icon={value} className="w-5 h-5 flex-shrink-0" />
+             )}
+             <span className="truncate">{source === 'upload' ? '本地图标' : value || "选择图标..."}</span>
           </div>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[320px] p-0" align="start">
-        <div className="p-4 pb-0">
+        <div className="space-y-3 p-4 pb-0">
             <div className="relative">
                 <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input 
@@ -98,6 +115,21 @@ export function IconPicker({ value, onChange }: IconPickerProps) {
                     onChange={(e) => setQuery(e.target.value)}
                 />
             </div>
+            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span>支持 Iconify 全部图标代码，例如 <code>mdi:home</code></span>
+              <label className="ef-cut shrink-0 cursor-pointer border px-2 py-1 text-foreground hover:bg-accent">
+                上传图标
+                <input type="file" accept="image/*,.svg" className="sr-only" onChange={handleUpload} />
+              </label>
+            </div>
+            <a
+              href="https://icon-sets.iconify.design/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-xs text-primary underline-offset-4 hover:underline"
+            >
+              在 Iconify 官网查找图标代码
+            </a>
         </div>
         <ScrollArea className="h-[300px] p-4">
             {loading ? (
@@ -107,10 +139,10 @@ export function IconPicker({ value, onChange }: IconPickerProps) {
                 </div>
             ) : (
                 <div className="grid grid-cols-5 gap-2">
-                    {icons.map((iconName) => (
+                    {displayedIcons.map((iconName) => (
                         <button
                             key={iconName}
-                            className={`p-2 rounded-md hover:bg-accent flex items-center justify-center transition-colors aspect-square ${value === iconName ? 'bg-accent ring-2 ring-primary' : ''}`}
+                            className={`ef-cut-bottom flex aspect-square items-center justify-center p-2 transition-colors hover:bg-accent ${value === iconName ? 'bg-accent ring-2 ring-primary' : ''}`}
                             onClick={() => {
                                 onChange(iconName);
                                 setOpen(false);
@@ -120,7 +152,7 @@ export function IconPicker({ value, onChange }: IconPickerProps) {
                             <Icon icon={iconName} className="w-6 h-6" />
                         </button>
                     ))}
-                    {icons.length === 0 && (
+                    {displayedIcons.length === 0 && (
                         <div className="col-span-5 text-center py-8 text-sm text-muted-foreground">
                             未找到图标
                         </div>
