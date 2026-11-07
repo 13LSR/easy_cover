@@ -13,6 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { IconPicker } from '@/components/cover/IconPicker';
+import SiteStats from '@/components/cover/SiteStats';
 import { Separator } from '@/components/ui/separator';
 import { Check, Copy, Download, Maximize, Moon, RotateCcw, Sun } from 'lucide-react';
 import { toPng } from 'html-to-image';
@@ -216,7 +217,7 @@ export default function Controls() {
             <div className="ef-eyebrow">{"// EASY COVER / STUDIO"}</div>
             <h1 className="mt-1 text-xl font-bold tracking-tight md:text-2xl">封面生成器</h1>
             <p className="mt-2 max-w-[280px] text-xs leading-5 text-muted-foreground">
-              数据仅保存在本地浏览器，安全安心。做好封面记得下载，刷新页面就没了！
+              封面内容和素材仅在本地浏览器处理，安全安心。做好封面记得下载，刷新页面就没了！
             </p>
           </div>
           <Button variant="outline" size="icon" className="ef-cut ef-touch shrink-0" onClick={toggleTheme} title={isDark ? '切换到冷库浅色模式' : '切换到夜班深色模式'}>
@@ -733,6 +734,8 @@ export default function Controls() {
             )}
           </section>
 
+          <Separator />
+          <SiteStats />
         </div>
       </ScrollArea>
       </div>

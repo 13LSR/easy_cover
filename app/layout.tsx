@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import Script from "next/script";
+import { umamiConfig } from "@/lib/umami";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,7 +18,19 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        {children}
+        <Script
+          id="umami-analytics"
+          src={`${umamiConfig.url}/script.js`}
+          data-website-id={umamiConfig.websiteId}
+          data-domains={umamiConfig.domains}
+          data-exclude-search="true"
+          data-exclude-hash="true"
+          data-do-not-track="true"
+          strategy="afterInteractive"
+        />
+      </body>
     </html>
   );
 }
