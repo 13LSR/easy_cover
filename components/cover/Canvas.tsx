@@ -72,7 +72,7 @@ export default function Canvas() {
       
       return (
       <div
-          className="flex items-center justify-center"
+          className="flex shrink-0 items-center justify-center"
           style={{
               transform: `rotate(${icon.rotation}deg)`,
               filter: icon.shadow ? `drop-shadow(0 ${icon.shadowOffsetY}px ${icon.shadowBlur}px ${icon.shadowColor})` : 'none',
@@ -118,10 +118,17 @@ export default function Canvas() {
   // Determine Layout Content
   const renderContent = () => {
       return (
-          <div className="relative flex items-center justify-center" style={{ gap: `${text.gap}px` }}>
-              <div className="z-10">{renderText(text.leftContent)}</div>
-              <div className="z-10">{renderText(text.rightContent)}</div>
-              <div className="z-20 absolute">{renderIcon()}</div>
+          <div
+              className="grid w-full items-center"
+              style={{
+                  // A zero-width middle column lets text extend beneath the centered icon.
+                  gridTemplateColumns: 'minmax(0, 1fr) 0px minmax(0, 1fr)',
+                  columnGap: `${text.gap}px`,
+              }}
+          >
+              <div className="z-10 w-max justify-self-end">{renderText(text.leftContent)}</div>
+              <div className="z-20 flex w-0 items-center justify-center">{renderIcon()}</div>
+              <div className="z-10 w-max justify-self-start">{renderText(text.rightContent)}</div>
           </div>
       );
   };
@@ -180,7 +187,7 @@ export default function Canvas() {
             </div>
 
             {/* Content Layer */}
-            <div className="z-10 pointer-events-none">
+            <div className="z-10 w-full pointer-events-none">
                  {renderContent()}
             </div>
 

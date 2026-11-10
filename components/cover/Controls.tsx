@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useCoverStore, RATIOS, IconShape } from '@/store/useCoverStore';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
@@ -33,6 +33,8 @@ const ResetButton = ({ onClick, tooltip = "重置" }: { onClick: () => void, too
 
 export default function Controls() {
   const store = useCoverStore();
+  const fontInputRef = useRef<HTMLInputElement>(null);
+  const backgroundInputRef = useRef<HTMLInputElement>(null);
   const [isDraggingBackground, setIsDraggingBackground] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [lastExportUrl, setLastExportUrl] = useState('');
@@ -291,16 +293,20 @@ export default function Controls() {
 
             <div className="space-y-2">
               <div className="flex justify-between items-center">
-                <Label>左右文字间距 ({store.text.gap}px)</Label>
+                <Label id="text-icon-gap-label">文字距图标中线 ({store.text.gap}px)</Label>
                 <ResetButton onClick={() => store.updateText({ gap: 32 })} />
               </div>
               <Slider
+                aria-labelledby="text-icon-gap-label"
                 value={[store.text.gap]}
                 min={0}
                 max={500}
                 step={1}
                 onValueChange={(v) => store.updateText({ gap: v[0] })}
               />
+              <p className="text-xs leading-5 text-muted-foreground">
+                0px 时两侧文字在图标中线相接，图标显示在文字上层。
+              </p>
             </div>
             
             <div className="space-y-2">
@@ -344,15 +350,21 @@ export default function Controls() {
              <div className="space-y-2">
                <div className="flex items-center justify-between gap-2">
                  <Label>自定义字体</Label>
-                 <label className="ef-cut ef-touch flex cursor-pointer items-center border border-border px-3 py-2 text-xs font-bold hover:bg-accent hover:text-accent-foreground">
+                 <Button
+                   type="button"
+                   variant="outline"
+                   className="ef-touch text-xs font-bold"
+                   onClick={() => fontInputRef.current?.click()}
+                 >
                    上传字体
-                   <input
-                     type="file"
-                     accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2"
-                     onChange={handleFontUpload}
-                     className="sr-only"
-                   />
-                 </label>
+                 </Button>
+                 <input
+                   ref={fontInputRef}
+                   type="file"
+                   accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2"
+                   onChange={handleFontUpload}
+                   hidden
+                 />
                </div>
                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                  <span className="truncate">{store.text.fontDataUrl ? `已选择：${store.text.fontFileName || '自定义字体'}` : '当前使用默认字体'}</span>
@@ -585,10 +597,15 @@ export default function Controls() {
                      >
                        <p className="text-sm font-bold">{store.background.imageFileName ? `已选择：${store.background.imageFileName}` : '拖拽图片到这里'}</p>
                        <p className="mt-1 text-xs text-muted-foreground">或点击下方按钮选择本地图片</p>
-                     <label className="ef-cut ef-touch mt-3 flex cursor-pointer items-center justify-center border border-border px-3 py-2 text-xs font-bold hover:bg-accent hover:text-accent-foreground">
+                     <Button
+                       type="button"
+                       variant="outline"
+                       className="ef-touch mt-3 w-full text-xs font-bold"
+                       onClick={() => backgroundInputRef.current?.click()}
+                     >
                        选择图片文件
-                       <input type="file" accept="image/*" onChange={handleImageUpload} className="sr-only" />
-                     </label>
+                     </Button>
+                     <input ref={backgroundInputRef} type="file" accept="image/*" onChange={handleImageUpload} hidden />
                      </div>
                      
                      <div className="space-y-2">

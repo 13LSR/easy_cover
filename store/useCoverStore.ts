@@ -18,7 +18,7 @@ export interface TextSettings {
   strokeColor: string;
   strokeWidth: number;
   fontWeight: number;
-  gap: number;
+  gap: number; // Distance from each text block's inner edge to the icon centerline, in px.
   fontFamily: string;
   fontDataUrl: string;
   fontFileName: string;

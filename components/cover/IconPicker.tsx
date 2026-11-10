@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Icon } from '@iconify/react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,7 @@ interface IconPickerProps {
 }
 
 export function IconPicker({ value, source = 'iconify', uploadedUrl, onChange, onUpload }: IconPickerProps) {
+  const uploadInputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [icons, setIcons] = useState<string[]>([]);
@@ -117,10 +118,16 @@ export function IconPicker({ value, source = 'iconify', uploadedUrl, onChange, o
             </div>
             <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
               <span>支持 Iconify 全部图标代码，例如 <code>mdi:home</code></span>
-              <label className="ef-cut shrink-0 cursor-pointer border px-2 py-1 text-foreground hover:bg-accent">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0 text-xs"
+                onClick={() => uploadInputRef.current?.click()}
+              >
                 上传图标
-                <input type="file" accept="image/*,.svg" className="sr-only" onChange={handleUpload} />
-              </label>
+              </Button>
+              <input ref={uploadInputRef} type="file" accept="image/*,.svg" onChange={handleUpload} hidden />
             </div>
             <a
               href="https://icon-sets.iconify.design/"
